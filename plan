@@ -1,0 +1,12 @@
+stack based
+(whitespace inspired)
+grammar: asa, yeh, tuh, saade, belle, horr, goiz,  , \n
+
+0 = yeh
+1 = tuh
+
+stack = asa
+arithmetic = horr
+heap = saade
+flow = belle
+io = goiz
