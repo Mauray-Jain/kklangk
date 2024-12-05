@@ -1,6 +1,6 @@
 const std = @import("std");
 
-ops: std.ArrayList(Ops),
+pub const Chunk = []const Ops;
 
 pub const Ops = union(enum) {
     PUSH: isize,
@@ -8,7 +8,7 @@ pub const Ops = union(enum) {
     COPYNTH: isize,
     SWAP,
     POP,
-    POPN: isize,
+    // POPN: isize,
 
     ADD,
     SUB,
@@ -41,11 +41,11 @@ pub const Ops = union(enum) {
         }
     }
 };
-
-test "tt" {
-    var t = Ops{ .JMP = 10 };
-    _ = &t;
-    t.disas();
-    const v = Ops{ .EXIT = void{} };
-    v.disas();
-}
+//
+// test "tt" {
+//     var t = Ops{ .JMP = 10 };
+//     _ = &t;
+//     t.disas();
+//     const v = Ops{ .EXIT = void{} };
+//     v.disas();
+// }

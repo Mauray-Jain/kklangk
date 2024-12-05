@@ -1,6 +1,6 @@
 const std = @import("std");
-const Chunk = @import("Chunk.zig");
-const Ops = Chunk.Ops;
+const Chunk = @import("chunk.zig").Chunk;
+const Ops = @import("chunk.zig").Ops;
 
 const Self = @This();
 
@@ -20,7 +20,6 @@ pub const Label = struct {
     pos: isize,
 };
 
-allocator: std.mem.Allocator,
 stack: std.ArrayList(isize),
 heap: std.ArrayList(HeapVal),
 labels: std.ArrayList(Label),
@@ -30,7 +29,6 @@ ip: isize,
 
 pub fn init(allocator: std.mem.Allocator, chunk: Chunk) Self {
     return Self{
-        .allocator = allocator,
         .stack = std.ArrayList(isize).init(allocator),
         .heap = std.ArrayList(HeapVal).init(allocator),
         .labels = std.ArrayList(Label).init(allocator),
@@ -48,15 +46,55 @@ pub fn deinit(self: *Self) void {
     self.ip = 0;
 }
 
+pub fn run(self: *Self) !void {
+    const stdout = std.io.getStdOut().writer();
+    const stdin = std.io.getStdIn().reader();
+    while (self.ip < self.chunk.len) : (self.ip += 1) {
+        const op = self.chunk[@intCast(self.ip)];
+        switch (op) {
+            .EXIT => {
+                self.deinit();
+                return;
+            },
+            .PUSH => try self.push(op.PUSH),
+            .DUP => try self.dup(),
+            .COPYNTH => try self.copynth(op.COPYNTH),
+            .SWAP => try self.swap(),
+            .POP => _ = try self.pop(),
+
+            .ADD => try self.arithmetic(.add),
+            .SUB => try self.arithmetic(.sub),
+            .MULT => try self.arithmetic(.mult),
+            .DIV => try self.arithmetic(.div),
+            .MOD => try self.arithmetic(.mod),
+
+            .HEAPSTR => try self.heapstr(),
+            .HEAPRET => try self.heapret(),
+
+            .MARK => try self.mark(op.MARK),
+            .CALL => try self.call(op.CALL),
+            .JMP => try self.jmp(.unconditional, op.JMP),
+            .JMPIF0 => try self.jmp(.iftop0, op.JMPIF0),
+            .JMPIFNEG => try self.jmp(.iftopneg, op.JMPIFNEG),
+            .RETURN => try self.end_subroutine(),
+
+            .OUTCHAR => try self.outchar(stdout),
+            .OUTNUM => try self.outnum(stdout),
+            .INCHAR => try self.inchar(stdin),
+            .INNUM => try self.innum(stdin),
+        }
+    }
+}
+
 ///////////////////
 // Stack funcs
 ///////////////////
 
 fn push(self: *Self, val: isize) std.mem.Allocator.Error!void {
-    if (self.stack.items.len + 1 > self.stack.capacity) {
-        try self.stack.ensureTotalCapacity(self.stack.capacity * 2);
-    }
-    self.stack.appendAssumeCapacity(val);
+    // if (self.stack.items.len >= self.stack.capacity) {
+    //     try self.stack.ensureTotalCapacity(self.stack.capacity * 2);
+    // }
+    try self.stack.append(val);
 }
 
 fn pop(self: *Self) StackErrors!isize {
@@ -68,13 +106,13 @@ fn resetStack(self: *Self) void {
 }
 
 fn dup(self: *Self) StackErrors!void {
-    const top = self.stack.getLastOrNull() orelse return error{StackEmpty};
+    const top = self.stack.getLastOrNull() orelse return StackErrors.InsufficientElements;
     return self.push(top);
 }
 
-fn copynth(self: *Self, n: usize) StackErrors!void {
+fn copynth(self: *Self, n: isize) StackErrors!void {
     if (self.stack.items.len < n) return StackErrors.InsufficientElements;
-    const val = self.stack.items[n];
+    const val = self.stack.items[@intCast(n)];
     return self.push(val);
 }
 
@@ -97,8 +135,8 @@ fn arithmetic(
         .add => items[items.len - 1] += val,
         .sub => items[items.len - 1] -= val,
         .mult => items[items.len - 1] *= val,
-        .div => items[items.len - 1] /= val,
-        .mod => items[items.len - 1] %= val,
+        .div => items[items.len - 1] = @divFloor(items[items.len - 1], val),
+        .mod => items[items.len - 1] = @mod(items[items.len - 1], val),
     }
 }
 
@@ -106,7 +144,7 @@ fn arithmetic(
 // Heap funcs
 ///////////////////
 
-fn store(self: *Self) StackErrors!void {
+fn heapstr(self: *Self) StackErrors!void {
     const val = try self.pop();
     const address = try self.pop();
     for (0.., self.heap.items) |i, item| {
@@ -118,7 +156,7 @@ fn store(self: *Self) StackErrors!void {
     try self.heap.append(.{ .address = address, .val = val });
 }
 
-fn retrieve(self: *Self) (StackErrors || HeapError)!void {
+fn heapret(self: *Self) (StackErrors || HeapError)!void {
     const address = try self.pop();
     for (self.heap.items) |v| {
         if (v.address == address) {
@@ -132,7 +170,8 @@ fn retrieve(self: *Self) (StackErrors || HeapError)!void {
 // Flow control
 ///////////////////
 
-fn reglabel(self: *Self, label: isize) AllocError!void {
+fn mark(self: *Self, label: isize) AllocError!void {
+    std.debug.print("Mark idhar hai ip: {d},{d}\n", .{ label, self.ip + 1 });
     try self.labels.append(.{ .name = label, .pos = self.ip + 1 });
 }
 
@@ -165,8 +204,9 @@ fn jmp(
                     if (top < 0) self.ip = item.pos;
                 },
             }
+            return;
         }
-    }
+    } else return LabelErrors.InvalidLabel;
 }
 
 fn end_subroutine(self: *Self) CallError!void {
@@ -178,20 +218,51 @@ fn end_subroutine(self: *Self) CallError!void {
 // I/O
 ///////////////////
 
-fn outc(self: *Self, stdout: std.fs.File.Writer) StackErrors!void {
-    stdout.print("{c}", .{try self.pop()});
+fn outchar(self: *Self, stdout: std.fs.File.Writer) !void {
+    const val = try self.pop();
+    const usize_val = @as(usize, @intCast(val));
+    try stdout.print("{c}", .{@as(u8, @truncate(usize_val))});
 }
 
-fn outnum(self: *Self, stdout: std.fs.File.Writer) StackErrors!void {
-    stdout.print("{d}", .{try self.pop()});
+fn outnum(self: *Self, stdout: std.fs.File.Writer) !void {
+    try stdout.print("{d}", .{try self.pop()});
 }
 
-fn readc(self: *Self, stdin: std.fs.File.Reader) !void {
+fn inchar(self: *Self, stdin: std.fs.File.Reader) !void {
     const val = try stdin.readByte();
     return self.push(@intCast(val));
 }
 
-fn readnum(self: *Self, stdin: std.fs.File.Reader) !void {
+fn innum(self: *Self, stdin: std.fs.File.Reader) !void {
     const val = try stdin.readInt(isize, .little);
     return self.push(@intCast(val));
+}
+
+///////////////////
+// Test
+///////////////////
+
+test "baremin" {
+    const chunk = &[_]Ops{
+        Ops{ .PUSH = 1 },
+        Ops{ .MARK = 420 },
+        Ops{ .DUP = void{} },
+        Ops{ .OUTNUM = void{} },
+        Ops{ .PUSH = 10 },
+        Ops{ .OUTCHAR = void{} },
+        Ops{ .PUSH = 1 },
+        Ops{ .ADD = void{} },
+        Ops{ .DUP = void{} },
+        Ops{ .PUSH = 11 },
+        Ops{ .SUB = void{} },
+        // Ops{ .JMPIF0 = 69 },
+        Ops{ .JMP = 420 },
+        Ops{ .MARK = 69 },
+        Ops{ .POP = void{} },
+        // Ops{ .EXIT = void{} },
+    };
+    var vm = Self.init(std.testing.allocator, chunk);
+    defer vm.deinit();
+    try vm.run();
+    std.debug.print("{any}\n", .{vm.stack.items});
 }
