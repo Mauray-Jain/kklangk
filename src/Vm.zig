@@ -49,11 +49,30 @@ pub fn deinit(self: *Self) void {
 pub fn run(self: *Self) !void {
     const stdout = std.io.getStdOut().writer();
     const stdin = std.io.getStdIn().reader();
+    // Main label is 16
+    var main: isize = @as(isize, @intCast(self.chunk.len));
+
     while (self.ip < self.chunk.len) : (self.ip += 1) {
         const op = self.chunk[@intCast(self.ip)];
         switch (op) {
+            .MARK => {
+                try self.mark(op.MARK);
+                if (op.MARK == 16) {
+                    main = self.ip;
+                }
+            },
+            else => {},
+        }
+    }
+
+    self.ip = main;
+
+    while (self.ip < self.chunk.len) : (self.ip += 1) {
+        // std.debug.print("{any}\n", .{self.stack.items});
+        const op = self.chunk[@intCast(self.ip)];
+        switch (op) {
             .EXIT => {
-                self.deinit();
+                self.ip = @as(isize, @intCast(self.chunk.len));
                 return;
             },
             .PUSH => try self.push(op.PUSH),
@@ -71,7 +90,7 @@ pub fn run(self: *Self) !void {
             .HEAPSTR => try self.heapstr(),
             .HEAPRET => try self.heapret(),
 
-            .MARK => try self.mark(op.MARK),
+            .MARK => {},
             .CALL => try self.call(op.CALL),
             .JMP => try self.jmp(.unconditional, op.JMP),
             .JMPIF0 => try self.jmp(.iftop0, op.JMPIF0),
@@ -171,14 +190,14 @@ fn heapret(self: *Self) (StackErrors || HeapError)!void {
 ///////////////////
 
 fn mark(self: *Self, label: isize) AllocError!void {
-    std.debug.print("Mark idhar hai ip: {d},{d}\n", .{ label, self.ip + 1 });
-    try self.labels.append(.{ .name = label, .pos = self.ip + 1 });
+    // std.debug.print("Mark idhar hai ip: {d},{d}\n", .{ label, self.ip });
+    try self.labels.append(.{ .name = label, .pos = self.ip });
 }
 
 fn call(self: *Self, label: isize) LabelErrors!void {
     for (self.labels.items) |item| {
         if (item.name == label) {
-            try self.call_stack.append(self.ip + 1);
+            try self.call_stack.append(self.ip);
             self.ip = item.pos;
             return;
         }
@@ -193,6 +212,7 @@ fn jmp(
 ) (StackErrors || LabelErrors)!void {
     for (self.labels.items) |item| {
         if (item.name == label) {
+            // std.debug.print("jmping to {d}\n", .{item.pos});
             switch (when) {
                 .unconditional => self.ip = item.pos,
                 .iftop0 => {
@@ -245,6 +265,9 @@ fn innum(self: *Self, stdin: std.fs.File.Reader) !void {
 test "baremin" {
     const chunk = &[_]Ops{
         Ops{ .PUSH = 1 },
+        Ops{ .OUTNUM = void{} },
+        Ops{ .MARK = 16 }, // Main func (kkartik ka fav num)
+        Ops{ .PUSH = 1 },
         Ops{ .MARK = 420 },
         Ops{ .DUP = void{} },
         Ops{ .OUTNUM = void{} },
@@ -255,14 +278,14 @@ test "baremin" {
         Ops{ .DUP = void{} },
         Ops{ .PUSH = 11 },
         Ops{ .SUB = void{} },
-        // Ops{ .JMPIF0 = 69 },
+        Ops{ .JMPIF0 = 69 },
         Ops{ .JMP = 420 },
         Ops{ .MARK = 69 },
         Ops{ .POP = void{} },
-        // Ops{ .EXIT = void{} },
+        Ops{ .EXIT = void{} },
     };
     var vm = Self.init(std.testing.allocator, chunk);
     defer vm.deinit();
     try vm.run();
-    std.debug.print("{any}\n", .{vm.stack.items});
+    // std.debug.print("{any}\n", .{vm.stack.items});
 }
