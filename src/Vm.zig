@@ -5,10 +5,12 @@ const Ops = @import("chunk.zig").Ops;
 const Self = @This();
 
 const AllocError = std.mem.Allocator.Error;
-pub const StackErrors = error{InsufficientElements} || AllocError;
-pub const HeapError = error{NoSuchElement};
-pub const LabelErrors = error{InvalidLabel} || AllocError;
-pub const CallError = error{EmptyCallStack};
+pub const VMErrors = error{
+    InsufficientElements,
+    EmptyCallStack,
+    InvalidLabel,
+    NoSuchElement,
+} || AllocError;
 
 pub const HeapVal = struct {
     address: isize,
@@ -46,61 +48,73 @@ pub fn deinit(self: *Self) void {
     self.ip = 0;
 }
 
-pub fn run(self: *Self) !void {
+fn handleErr(self: *Self, err: anyerror) noreturn {
+    const line = self.chunk.getLine(@intCast(self.ip));
+    const msg = switch (err) {
+        VMErrors.OutOfMemory => "Ran out of heap memory! Get a better computer sucker!",
+        VMErrors.EmptyCallStack => "Nowhere to return to",
+        VMErrors.InvalidLabel => "Hey that label doesnt exist",
+        VMErrors.NoSuchElement => "No such element on the heap",
+        VMErrors.InsufficientElements => "Not enough elements on stack to do this",
+        else => @errorName(err),
+    };
+    std.debug.print("Line {d}:\n\t{s}: {s}\n", .{ line, @errorName(err), msg });
+    self.deinit();
+    std.process.exit(1);
+}
+
+pub fn run(self: *Self) void {
     const stdout = std.io.getStdOut().writer();
     const stdin = std.io.getStdIn().reader();
     // Main label is 16
-    var main: isize = @as(isize, @intCast(self.chunk.len));
+    self.ip = @as(isize, @intCast(self.chunk.ops.len));
 
-    while (self.ip < self.chunk.len) : (self.ip += 1) {
-        const op = self.chunk[@intCast(self.ip)];
+    for (self.chunk.ops, 0..) |op, pos| {
         switch (op) {
             .MARK => {
-                try self.mark(op.MARK);
+                self.mark(op.MARK, @intCast(pos)) catch |err| self.handleErr(err);
                 if (op.MARK == 16) {
-                    main = self.ip;
+                    self.ip = @intCast(pos);
                 }
             },
             else => {},
         }
     }
 
-    self.ip = main;
-
-    while (self.ip < self.chunk.len) : (self.ip += 1) {
+    while (self.ip < self.chunk.ops.len) : (self.ip += 1) {
         // std.debug.print("{any}\n", .{self.stack.items});
-        const op = self.chunk[@intCast(self.ip)];
+        const op = self.chunk.ops[@intCast(self.ip)];
         switch (op) {
             .EXIT => {
-                self.ip = @as(isize, @intCast(self.chunk.len));
+                self.ip = @as(isize, @intCast(self.chunk.ops.len));
                 return;
             },
-            .PUSH => try self.push(op.PUSH),
-            .DUP => try self.dup(),
-            .COPYNTH => try self.copynth(op.COPYNTH),
-            .SWAP => try self.swap(),
-            .POP => _ = try self.pop(),
+            .PUSH => self.push(op.PUSH) catch |err| self.handleErr(err),
+            .DUP => self.dup() catch |err| self.handleErr(err),
+            .COPYNTH => self.copynth(op.COPYNTH) catch |err| self.handleErr(err),
+            .SWAP => self.swap() catch |err| self.handleErr(err),
+            .POP => _ = self.pop() catch |err| self.handleErr(err),
 
-            .ADD => try self.arithmetic(.add),
-            .SUB => try self.arithmetic(.sub),
-            .MULT => try self.arithmetic(.mult),
-            .DIV => try self.arithmetic(.div),
-            .MOD => try self.arithmetic(.mod),
+            .ADD => self.arithmetic(.add) catch |err| self.handleErr(err),
+            .SUB => self.arithmetic(.sub) catch |err| self.handleErr(err),
+            .MULT => self.arithmetic(.mult) catch |err| self.handleErr(err),
+            .DIV => self.arithmetic(.div) catch |err| self.handleErr(err),
+            .MOD => self.arithmetic(.mod) catch |err| self.handleErr(err),
 
-            .HEAPSTR => try self.heapstr(),
-            .HEAPRET => try self.heapret(),
+            .HEAPSTR => self.heapstr() catch |err| self.handleErr(err),
+            .HEAPRET => self.heapret() catch |err| self.handleErr(err),
 
             .MARK => {},
-            .CALL => try self.call(op.CALL),
-            .JMP => try self.jmp(.unconditional, op.JMP),
-            .JMPIF0 => try self.jmp(.iftop0, op.JMPIF0),
-            .JMPIFNEG => try self.jmp(.iftopneg, op.JMPIFNEG),
-            .RETURN => try self.end_subroutine(),
+            .CALL => self.call(op.CALL) catch |err| self.handleErr(err),
+            .JMP => self.jmp(.unconditional, op.JMP) catch |err| self.handleErr(err),
+            .JMPIF0 => self.jmp(.iftop0, op.JMPIF0) catch |err| self.handleErr(err),
+            .JMPIFNEG => self.jmp(.iftopneg, op.JMPIFNEG) catch |err| self.handleErr(err),
+            .RETURN => self.end_subroutine() catch |err| self.handleErr(err),
 
-            .OUTCHAR => try self.outchar(stdout),
-            .OUTNUM => try self.outnum(stdout),
-            .INCHAR => try self.inchar(stdin),
-            .INNUM => try self.innum(stdin),
+            .OUTCHAR => self.outchar(stdout) catch |err| self.handleErr(err),
+            .OUTNUM => self.outnum(stdout) catch |err| self.handleErr(err),
+            .INCHAR => self.inchar(stdin) catch |err| self.handleErr(err),
+            .INNUM => self.innum(stdin) catch |err| self.handleErr(err),
         }
     }
 }
@@ -109,35 +123,35 @@ pub fn run(self: *Self) !void {
 // Stack funcs
 ///////////////////
 
-fn push(self: *Self, val: isize) std.mem.Allocator.Error!void {
+fn push(self: *Self, val: isize) VMErrors!void {
     // if (self.stack.items.len >= self.stack.capacity) {
     //     try self.stack.ensureTotalCapacity(self.stack.capacity * 2);
     // }
     try self.stack.append(val);
 }
 
-fn pop(self: *Self) StackErrors!isize {
-    return self.stack.popOrNull() orelse return StackErrors.InsufficientElements;
+fn pop(self: *Self) VMErrors!isize {
+    return self.stack.popOrNull() orelse return VMErrors.InsufficientElements;
 }
 
 fn resetStack(self: *Self) void {
     self.stack.clearRetainingCapacity();
 }
 
-fn dup(self: *Self) StackErrors!void {
-    const top = self.stack.getLastOrNull() orelse return StackErrors.InsufficientElements;
+fn dup(self: *Self) VMErrors!void {
+    const top = self.stack.getLastOrNull() orelse return VMErrors.InsufficientElements;
     return self.push(top);
 }
 
-fn copynth(self: *Self, n: isize) StackErrors!void {
-    if (self.stack.items.len < n) return StackErrors.InsufficientElements;
+fn copynth(self: *Self, n: isize) VMErrors!void {
+    if (self.stack.items.len < n) return VMErrors.InsufficientElements;
     const val = self.stack.items[@intCast(n)];
     return self.push(val);
 }
 
-fn swap(self: *Self) StackErrors!void {
+fn swap(self: *Self) VMErrors!void {
     const items = self.stack.items;
-    if (items.len < 2) return StackErrors.InsufficientElements;
+    if (items.len < 2) return VMErrors.InsufficientElements;
     const temp: isize = items[items.len - 1];
     items[items.len - 1] = items[items.len - 2];
     items[items.len - 2] = temp;
@@ -146,8 +160,8 @@ fn swap(self: *Self) StackErrors!void {
 fn arithmetic(
     self: *Self,
     comptime op: enum { add, sub, mult, div, mod },
-) StackErrors!void {
-    if (self.stack.items.len < 2) return StackErrors.InsufficientElements;
+) VMErrors!void {
+    if (self.stack.items.len < 2) return VMErrors.InsufficientElements;
     const val = try self.pop();
     var items = self.stack.items;
     switch (op) {
@@ -163,7 +177,7 @@ fn arithmetic(
 // Heap funcs
 ///////////////////
 
-fn heapstr(self: *Self) StackErrors!void {
+fn heapstr(self: *Self) VMErrors!void {
     const val = try self.pop();
     const address = try self.pop();
     for (0.., self.heap.items) |i, item| {
@@ -175,26 +189,26 @@ fn heapstr(self: *Self) StackErrors!void {
     try self.heap.append(.{ .address = address, .val = val });
 }
 
-fn heapret(self: *Self) (StackErrors || HeapError)!void {
+fn heapret(self: *Self) VMErrors!void {
     const address = try self.pop();
     for (self.heap.items) |v| {
         if (v.address == address) {
             return self.push(v.val);
         }
     }
-    return HeapError.NoSuchElement;
+    return VMErrors.NoSuchElement;
 }
 
 ///////////////////
 // Flow control
 ///////////////////
 
-fn mark(self: *Self, label: isize) AllocError!void {
+fn mark(self: *Self, label: isize, pos: isize) VMErrors!void {
     // std.debug.print("Mark idhar hai ip: {d},{d}\n", .{ label, self.ip });
-    try self.labels.append(.{ .name = label, .pos = self.ip });
+    try self.labels.append(.{ .name = label, .pos = pos });
 }
 
-fn call(self: *Self, label: isize) LabelErrors!void {
+fn call(self: *Self, label: isize) VMErrors!void {
     for (self.labels.items) |item| {
         if (item.name == label) {
             try self.call_stack.append(self.ip);
@@ -202,14 +216,14 @@ fn call(self: *Self, label: isize) LabelErrors!void {
             return;
         }
     }
-    return LabelErrors.InvalidLabel;
+    return VMErrors.InvalidLabel;
 }
 
 fn jmp(
     self: *Self,
     when: enum { unconditional, iftop0, iftopneg },
     label: isize,
-) (StackErrors || LabelErrors)!void {
+) VMErrors!void {
     for (self.labels.items) |item| {
         if (item.name == label) {
             // std.debug.print("jmping to {d}\n", .{item.pos});
@@ -226,11 +240,11 @@ fn jmp(
             }
             return;
         }
-    } else return LabelErrors.InvalidLabel;
+    } else return VMErrors.InvalidLabel;
 }
 
-fn end_subroutine(self: *Self) CallError!void {
-    const tojmp = self.call_stack.popOrNull() orelse return CallError.EmptyCallStack;
+fn end_subroutine(self: *Self) VMErrors!void {
+    const tojmp = self.call_stack.popOrNull() orelse return VMErrors.EmptyCallStack;
     self.ip = tojmp;
 }
 
@@ -284,8 +298,31 @@ test "baremin" {
         Ops{ .POP = void{} },
         Ops{ .EXIT = void{} },
     };
-    var vm = Self.init(std.testing.allocator, chunk);
+
+    const LineInfo = @import("chunk.zig").LineInfo;
+    const lines = &[_]LineInfo{
+        LineInfo{ .linenum = 1, .offset = 0 },
+        LineInfo{ .linenum = 2, .offset = 2 },
+        LineInfo{ .linenum = 3, .offset = 3 },
+        LineInfo{ .linenum = 4, .offset = 4 },
+        LineInfo{ .linenum = 5, .offset = 5 },
+        LineInfo{ .linenum = 6, .offset = 6 },
+        LineInfo{ .linenum = 7, .offset = 7 },
+        LineInfo{ .linenum = 8, .offset = 8 },
+        LineInfo{ .linenum = 9, .offset = 9 },
+        LineInfo{ .linenum = 10, .offset = 10 },
+        LineInfo{ .linenum = 11, .offset = 11 },
+        LineInfo{ .linenum = 12, .offset = 12 },
+        // LineInfo{ .linenum = 13, .offset = 13 },
+        // LineInfo{ .linenum = 14, .offset = 14 },
+        // LineInfo{ .linenum = 15, .offset = 15 },
+        // LineInfo{ .linenum = 16, .offset = 16 },
+        // LineInfo{ .linenum = 17, .offset = 17 },
+        // LineInfo{ .linenum = 18, .offset = 18 },
+    };
+
+    var vm = Self.init(std.testing.allocator, Chunk{ .lines = lines, .ops = chunk });
     defer vm.deinit();
-    try vm.run();
+    vm.run();
     // std.debug.print("{any}\n", .{vm.stack.items});
 }

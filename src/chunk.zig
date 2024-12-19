@@ -1,6 +1,33 @@
 const std = @import("std");
 
-pub const Chunk = []const Ops;
+pub const Chunk = struct {
+    ops: []const Ops,
+    lines: []const LineInfo,
+
+    pub fn getLine(self: *const @This(), idx: usize) usize {
+        var start: usize = 0;
+        var end: usize = self.lines.len;
+        // std.debug.print("Got: {d}\n", .{idx});
+
+        while (start < end) {
+            const mid = (start + end) / 2;
+            const lineinfo = self.lines[mid];
+            if (idx < lineinfo.offset) {
+                end = mid;
+            } else if (mid == self.lines.len - 1 or idx < self.lines[mid + 1].offset) {
+                return lineinfo.linenum;
+            } else {
+                start = mid + 1;
+            }
+        }
+        return 0;
+    }
+};
+
+pub const LineInfo = struct {
+    linenum: usize,
+    offset: usize,
+};
 
 pub const Ops = union(enum) {
     PUSH: isize,
