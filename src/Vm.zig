@@ -51,8 +51,8 @@ pub fn deinit(self: *Self) void {
 fn handleErr(self: *Self, err: anyerror) noreturn {
     const line = self.chunk.getLine(@intCast(self.ip));
     const msg = switch (err) {
-        VMErrors.OutOfMemory => "Ran out of heap memory! Get a better computer sucker!",
-        VMErrors.EmptyCallStack => "Nowhere to return to",
+        VMErrors.OutOfMemory => "Peg Tim Cook",
+        VMErrors.EmptyCallStack => "Chandigarh train missed",
         VMErrors.InvalidLabel => "Hey that label doesnt exist",
         VMErrors.NoSuchElement => "No such element on the heap",
         VMErrors.InsufficientElements => "Not enough elements on stack to do this",

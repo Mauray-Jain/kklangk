@@ -1,10 +1,15 @@
 const std = @import("std");
 
+const x = union(enum) { Test: usize, test2, test23, testt, test2i, itest23 };
+
+fn ttt() x {
+    return x.Test;
+}
+
 pub fn main() !void {
     // Prints to stderr (it's a shortcut based on `std.io.getStdErr()`)
     std.debug.print("All your {s} are belong to us.\n", .{"codebase"});
-    const x = enum { Test, test2, test23, testt, test2i, itest23 };
-    std.debug.print("{any}, {any}\n", .{ @sizeOf(x), @bitSizeOf(x) });
+    std.debug.print("{any}, {any}\n", .{ ttt(), @bitSizeOf(x) });
 
     // stdout is for the actual output of your application, for example if you
     // are implementing gzip, then only the compressed bytes should be sent to

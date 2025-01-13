@@ -1,6 +1,6 @@
 stack based
 (whitespace inspired)
-grammar: asa, yeh, tuh, saade, belle, horr, goiz,  , \n
+grammar: asa, chuss, yeh, tuh, saade, belle, horr, goiz,  , \n
 
 0 = yeh
 1 = tuh
@@ -10,3 +10,36 @@ arithmetic = horr
 heap = saade
 flow = belle
 io = goiz
+
+stack:
+	push = chuss
+	dup = asa
+	copynth = saade
+	swap = yeh
+	pop = tuh
+
+arithmetic:
+	add = tuh
+	sub = yeh
+	mult = asa
+	div = chuss
+	mod = horr
+
+heap:
+	str = yeh
+	ret = tuh
+
+flow:
+	mark = asa
+	call = chuss
+	jmp = horr
+	jmpif0 = goiz
+	jmpifneg = saade
+	ret = yeh
+	exit = tuh
+
+io:
+	outc = yeh
+	inc = tuh
+	outd = asa
+	ind = chuss
