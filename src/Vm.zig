@@ -36,7 +36,7 @@ pub fn init(allocator: std.mem.Allocator, chunk: Chunk) Self {
         .labels = std.ArrayList(Label).init(allocator),
         .call_stack = std.ArrayList(isize).init(allocator),
         .chunk = chunk,
-        .ip = 0,
+        .ip = @as(isize, @intCast(chunk.ops.len)),
     };
 }
 
@@ -66,9 +66,8 @@ fn handleErr(self: *Self, err: anyerror) noreturn {
 pub fn run(self: *Self) void {
     const stdout = std.io.getStdOut().writer();
     const stdin = std.io.getStdIn().reader();
-    // Main label is 16
-    self.ip = @as(isize, @intCast(self.chunk.ops.len));
 
+    // Storing all labels and finding label 16 (main)
     for (self.chunk.ops, 0..) |op, pos| {
         switch (op) {
             .MARK => {
@@ -81,41 +80,43 @@ pub fn run(self: *Self) void {
         }
     }
 
+    // Execing them
     while (self.ip < self.chunk.ops.len) : (self.ip += 1) {
         // std.debug.print("{any}\n", .{self.stack.items});
         const op = self.chunk.ops[@intCast(self.ip)];
-        switch (op) {
-            .EXIT => {
-                self.ip = @as(isize, @intCast(self.chunk.ops.len));
-                return;
-            },
-            .PUSH => self.push(op.PUSH) catch |err| self.handleErr(err),
-            .DUP => self.dup() catch |err| self.handleErr(err),
-            .COPYNTH => self.copynth(op.COPYNTH) catch |err| self.handleErr(err),
-            .SWAP => self.swap() catch |err| self.handleErr(err),
-            .POP => _ = self.pop() catch |err| self.handleErr(err),
+        self.execInstruction(op, stdout, stdin) catch |err| self.handleErr(err);
+    }
+}
 
-            .ADD => self.arithmetic(.add) catch |err| self.handleErr(err),
-            .SUB => self.arithmetic(.sub) catch |err| self.handleErr(err),
-            .MULT => self.arithmetic(.mult) catch |err| self.handleErr(err),
-            .DIV => self.arithmetic(.div) catch |err| self.handleErr(err),
-            .MOD => self.arithmetic(.mod) catch |err| self.handleErr(err),
+fn execInstruction(self: *Self, op: Ops, stdout: std.fs.File.Writer, stdin: std.fs.File.Reader) anyerror!void {
+    switch (op) {
+        .EXIT => self.ip = @as(isize, @intCast(self.chunk.ops.len)),
+        .PUSH => try self.push(op.PUSH),
+        .DUP => try self.dup(),
+        .COPYNTH => try self.copynth(op.COPYNTH),
+        .SWAP => try self.swap(),
+        .POP => _ = try self.pop(),
 
-            .HEAPSTR => self.heapstr() catch |err| self.handleErr(err),
-            .HEAPRET => self.heapret() catch |err| self.handleErr(err),
+        .ADD => try self.arithmetic(.add),
+        .SUB => try self.arithmetic(.sub),
+        .MULT => try self.arithmetic(.mult),
+        .DIV => try self.arithmetic(.div),
+        .MOD => try self.arithmetic(.mod),
 
-            .MARK => {},
-            .CALL => self.call(op.CALL) catch |err| self.handleErr(err),
-            .JMP => self.jmp(.unconditional, op.JMP) catch |err| self.handleErr(err),
-            .JMPIF0 => self.jmp(.iftop0, op.JMPIF0) catch |err| self.handleErr(err),
-            .JMPIFNEG => self.jmp(.iftopneg, op.JMPIFNEG) catch |err| self.handleErr(err),
-            .RETURN => self.end_subroutine() catch |err| self.handleErr(err),
+        .HEAPSTR => try self.heapstr(),
+        .HEAPRET => try self.heapret(),
 
-            .OUTCHAR => self.outchar(stdout) catch |err| self.handleErr(err),
-            .OUTNUM => self.outnum(stdout) catch |err| self.handleErr(err),
-            .INCHAR => self.inchar(stdin) catch |err| self.handleErr(err),
-            .INNUM => self.innum(stdin) catch |err| self.handleErr(err),
-        }
+        .MARK => {},
+        .CALL => try self.call(op.CALL),
+        .JMP => try self.jmp(.unconditional, op.JMP),
+        .JMPIF0 => try self.jmp(.iftop0, op.JMPIF0),
+        .JMPIFNEG => try self.jmp(.iftopneg, op.JMPIFNEG),
+        .RETURN => try self.end_subroutine(),
+
+        .OUTCHAR => try self.outchar(stdout),
+        .OUTNUM => try self.outnum(stdout),
+        .INCHAR => try self.inchar(stdin),
+        .INNUM => try self.innum(stdin),
     }
 }
 
@@ -204,7 +205,7 @@ fn heapret(self: *Self) VMErrors!void {
 ///////////////////
 
 fn mark(self: *Self, label: isize, pos: isize) VMErrors!void {
-    // std.debug.print("Mark idhar hai ip: {d},{d}\n", .{ label, self.ip });
+    // std.debug.print("Teja mai hoon Mark idhar hai ip: {d},{d}\n", .{ label, self.ip });
     try self.labels.append(.{ .name = label, .pos = pos });
 }
 

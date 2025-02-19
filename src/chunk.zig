@@ -61,14 +61,14 @@ pub const Ops = union(enum) {
 
     pub fn disas(val: @This()) void {
         const tag = @tagName(val);
-        inline for (std.meta.fields(@This())) |f| {
+        inline for (std.meta.fields(@This())) |f| { // doing bcoz in @field the name shld be comptime known
             if (std.mem.eql(u8, f.name, tag)) {
                 std.debug.print("{} {s}\n", .{ @field(val, f.name), f.name });
             }
         }
     }
 };
-//
+
 // test "tt" {
 //     var t = Ops{ .JMP = 10 };
 //     _ = &t;

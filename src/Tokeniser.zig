@@ -1,3 +1,5 @@
+const std = @import("std");
+
 pub const Token = union(enum) {
     ASA: usize,
     BELLE: usize,
@@ -8,6 +10,15 @@ pub const Token = union(enum) {
     TUH: usize,
     YEH: usize,
     EOF: void,
+
+    pub fn disas(val: @This()) void {
+        const tag = @tagName(val);
+        inline for (std.meta.fields(@This())) |f| { // doing bcoz in @field the name shld be comptime known
+            if (std.mem.eql(u8, f.name, tag)) {
+                std.debug.print("{} {s}\n", .{ @field(val, f.name), f.name });
+            }
+        }
+    }
 };
 
 const Self = @This();
@@ -27,7 +38,7 @@ pub fn init(src: []const u8) Self {
 }
 
 fn skipWhitespace(self: *Self) void {
-    while (true) : (self.current += 1) {
+    while (self.current < self.src.len) : (self.current += 1) {
         switch (self.src[self.current]) {
             ' ', '\t', '\r' => {},
             '\n' => self.line += 1,
@@ -36,8 +47,8 @@ fn skipWhitespace(self: *Self) void {
     }
 }
 
-fn skipWord(self: *Self) void {
-    while (true) : (self.current += 1) {
+fn consumeWord(self: *Self) void {
+    while (self.current < self.src.len) : (self.current += 1) {
         switch (self.src[self.current]) {
             ' ', '\r', '\t' => return,
             '\n' => {
@@ -49,21 +60,57 @@ fn skipWord(self: *Self) void {
     }
 }
 
+fn checkKeyword(self: *Self, rest: []const u8, token: Token) error{Missing}!Token {
+    if (std.mem.eql(u8, rest, self.src[self.start..self.current])) {
+        std.debug.print("{s}\n", .{self.src[self.start..self.current]});
+        return token;
+    }
+    self.consumeWord();
+    return error.Missing;
+}
+
 pub fn scanToken(self: *Self) Token {
+    self.skipWhitespace();
+    self.start = self.current;
+    self.consumeWord();
+
     while (self.current < self.src.len) {
-        self.skipWhitespace();
-        self.start = self.current;
-        switch (self.src[self.current]) {
-            'a' => return self.checkKeyword("sa", Token{ .ASA = self.line }),
-            'b' => return self.checkKeyword("elle", Token{ .BELLE = self.line }),
-            'c' => return self.checkKeyword("huss", Token{ .CHUSS = self.line }),
-            'g' => return self.checkKeyword("oiz", Token{ .GOIZ = self.line }),
-            'h' => return self.checkKeyword("orr", Token{ .HORR = self.line }),
-            's' => return self.checkKeyword("aade", Token{ .SAADE = self.line }),
-            't' => return self.checkKeyword("uh", Token{ .TUH = self.line }),
-            'y' => return self.checkKeyword("eh", Token{ .YEH = self.line }),
-            else => self.skipWord(), // everything else is ignored,
+        std.debug.print("{c}\n", .{self.src[self.start]});
+        switch (self.src[self.start]) {
+            'a' => return self.checkKeyword("sa", Token{ .ASA = self.line }) catch continue,
+            'b' => return self.checkKeyword("elle", Token{ .BELLE = self.line }) catch continue,
+            'c' => return self.checkKeyword("huss", Token{ .CHUSS = self.line }) catch continue,
+            'g' => return self.checkKeyword("oiz", Token{ .GOIZ = self.line }) catch continue,
+            'h' => return self.checkKeyword("orr", Token{ .HORR = self.line }) catch continue,
+            's' => return self.checkKeyword("aade", Token{ .SAADE = self.line }) catch continue,
+            't' => return self.checkKeyword("uh", Token{ .TUH = self.line }) catch continue,
+            'y' => return self.checkKeyword("eh", Token{ .YEH = self.line }) catch continue,
+            else => self.consumeWord(), // everything else is ignored
         }
     }
     return Token{ .EOF = void{} };
+}
+
+test "toktok" {
+    // const src: []const u8 =
+    //     \\  asaaa as    a asa saade
+    //     \\belle goiz dsl
+    //     \\yeh byeh
+    // ;
+
+    const src =
+        \\asa
+    ;
+
+    var token: Token = undefined;
+    var scanner = Self.init(src);
+
+    while (true) {
+        token = scanner.scanToken();
+        token.disas();
+        switch (token) {
+            .EOF => break,
+            else => {},
+        }
+    }
 }
