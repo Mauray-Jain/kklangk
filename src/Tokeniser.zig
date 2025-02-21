@@ -56,7 +56,6 @@ fn checkKeyword(self: *Self, rest: []const u8, token: Token) error{Missing}!Toke
     if (std.mem.eql(u8, rest, self.src[self.start + 1 .. self.current])) {
         return token;
     }
-    self.consumeWord();
     return error.Missing;
 }
 
