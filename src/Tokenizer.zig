@@ -52,7 +52,7 @@ fn consumeWord(self: *Self) void {
         self.current += 1;
 }
 
-fn checkKeyword(self: *Self, rest: []const u8, token: Token) error{Missing}!Token {
+fn checkKeyword(self: *const Self, rest: []const u8, token: Token) error{Missing}!Token {
     if (std.mem.eql(u8, rest, self.src[self.start + 1 .. self.current])) {
         return token;
     }

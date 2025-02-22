@@ -1,6 +1,6 @@
 const std = @import("std");
-const Chunk = @import("chunk.zig").Chunk;
-const Ops = @import("chunk.zig").Ops;
+const Chunk = @import("Chunk.zig");
+const Ops = @import("Chunk.zig").Ops;
 
 const Self = @This();
 
@@ -12,12 +12,12 @@ pub const VMErrors = error{
     NoSuchElement,
 } || AllocError;
 
-pub const HeapVal = struct {
+const HeapVal = struct {
     address: isize,
     val: isize,
 };
 
-pub const Label = struct {
+const Label = struct {
     name: isize,
     pos: isize,
 };
@@ -300,7 +300,7 @@ test "baremin" {
         Ops{ .EXIT = void{} },
     };
 
-    const LineInfo = @import("chunk.zig").LineInfo;
+    const LineInfo = @import("Chunk.zig").LineInfo;
     const lines = &[_]LineInfo{
         LineInfo{ .linenum = 1, .offset = 0 },
         LineInfo{ .linenum = 2, .offset = 2 },
