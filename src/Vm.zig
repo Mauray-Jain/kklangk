@@ -13,28 +13,28 @@ pub const VMErrors = error{
 } || AllocError;
 
 const HeapVal = struct {
-    address: isize,
-    val: isize,
+    address: i64,
+    val: i64,
 };
 
 const Label = struct {
-    name: isize,
+    name: i64,
     pos: isize,
 };
 
-stack: std.ArrayList(isize),
+stack: std.ArrayList(i64),
 heap: std.ArrayList(HeapVal),
 labels: std.ArrayList(Label),
-call_stack: std.ArrayList(isize),
+call_stack: std.ArrayList(i64),
 chunk: Chunk,
 ip: isize,
 
 pub fn init(allocator: std.mem.Allocator, chunk: Chunk) Self {
     return Self{
-        .stack = std.ArrayList(isize).init(allocator),
+        .stack = std.ArrayList(i64).init(allocator),
         .heap = std.ArrayList(HeapVal).init(allocator),
         .labels = std.ArrayList(Label).init(allocator),
-        .call_stack = std.ArrayList(isize).init(allocator),
+        .call_stack = std.ArrayList(i64).init(allocator),
         .chunk = chunk,
         .ip = @as(isize, @intCast(chunk.ops.len)),
     };
@@ -58,7 +58,8 @@ fn handleErr(self: *Self, err: anyerror) noreturn {
         VMErrors.InsufficientElements => "Not enough elements on stack to do this",
         else => @errorName(err),
     };
-    std.debug.print("Line {d}:\n\t{s}: {s}\n", .{ line, @errorName(err), msg });
+    var stderr = std.io.getStdErr().writer();
+    stderr.print("Line {d}:\n\t{s}: {s}\n", .{ line, @errorName(err), msg }) catch {};
     self.deinit();
     std.process.exit(1);
 }
@@ -124,27 +125,27 @@ fn execInstruction(self: *Self, op: Ops, stdout: std.fs.File.Writer, stdin: std.
 // Stack funcs
 ///////////////////
 
-fn push(self: *Self, val: isize) VMErrors!void {
+fn push(self: *Self, val: i64) VMErrors!void {
     // if (self.stack.items.len >= self.stack.capacity) {
     //     try self.stack.ensureTotalCapacity(self.stack.capacity * 2);
     // }
     try self.stack.append(val);
 }
 
-fn pop(self: *Self) VMErrors!isize {
+fn pop(self: *Self) VMErrors!i64 {
     return self.stack.popOrNull() orelse return VMErrors.InsufficientElements;
 }
 
-fn resetStack(self: *Self) void {
-    self.stack.clearRetainingCapacity();
-}
+// fn resetStack(self: *Self) void {
+//     self.stack.clearRetainingCapacity();
+// }
 
 fn dup(self: *Self) VMErrors!void {
     const top = self.stack.getLastOrNull() orelse return VMErrors.InsufficientElements;
     return self.push(top);
 }
 
-fn copynth(self: *Self, n: isize) VMErrors!void {
+fn copynth(self: *Self, n: i64) VMErrors!void {
     if (self.stack.items.len < n) return VMErrors.InsufficientElements;
     const val = self.stack.items[@intCast(n)];
     return self.push(val);
@@ -153,7 +154,7 @@ fn copynth(self: *Self, n: isize) VMErrors!void {
 fn swap(self: *Self) VMErrors!void {
     const items = self.stack.items;
     if (items.len < 2) return VMErrors.InsufficientElements;
-    const temp: isize = items[items.len - 1];
+    const temp: i64 = items[items.len - 1];
     items[items.len - 1] = items[items.len - 2];
     items[items.len - 2] = temp;
 }
@@ -204,12 +205,12 @@ fn heapret(self: *Self) VMErrors!void {
 // Flow control
 ///////////////////
 
-fn mark(self: *Self, label: isize, pos: isize) VMErrors!void {
+fn mark(self: *Self, label: i64, pos: isize) VMErrors!void {
     // std.debug.print("Teja mai hoon Mark idhar hai ip: {d},{d}\n", .{ label, self.ip });
     try self.labels.append(.{ .name = label, .pos = pos });
 }
 
-fn call(self: *Self, label: isize) VMErrors!void {
+fn call(self: *Self, label: i64) VMErrors!void {
     for (self.labels.items) |item| {
         if (item.name == label) {
             try self.call_stack.append(self.ip);
@@ -223,7 +224,7 @@ fn call(self: *Self, label: isize) VMErrors!void {
 fn jmp(
     self: *Self,
     when: enum { unconditional, iftop0, iftopneg },
-    label: isize,
+    label: i64,
 ) VMErrors!void {
     for (self.labels.items) |item| {
         if (item.name == label) {
@@ -269,7 +270,7 @@ fn inchar(self: *Self, stdin: std.fs.File.Reader) !void {
 }
 
 fn innum(self: *Self, stdin: std.fs.File.Reader) !void {
-    const val = try stdin.readInt(isize, .little);
+    const val = try stdin.readInt(i64, .little);
     return self.push(@intCast(val));
 }
 

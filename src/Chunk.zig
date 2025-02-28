@@ -28,12 +28,12 @@ pub fn getLine(self: *const @This(), idx: usize) usize {
 }
 
 pub const Ops = union(enum) {
-    PUSH: isize,
+    PUSH: i64,
     DUP,
-    COPYNTH: isize,
+    COPYNTH: i64,
     SWAP,
     POP,
-    // POPN: isize,
+    // POPN: i64,
 
     ADD,
     SUB,
@@ -44,11 +44,11 @@ pub const Ops = union(enum) {
     HEAPSTR,
     HEAPRET,
 
-    MARK: isize,
-    CALL: isize,
-    JMP: isize,
-    JMPIF0: isize,
-    JMPIFNEG: isize,
+    MARK: i64,
+    CALL: i64,
+    JMP: i64,
+    JMPIF0: i64,
+    JMPIFNEG: i64,
     RETURN,
     EXIT,
 

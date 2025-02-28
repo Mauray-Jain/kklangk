@@ -12,9 +12,9 @@ flow = belle
 io = goiz
 
 stack:
-	push = chuss
+	push = chuss (num)
 	dup = asa
-	copynth = saade
+	copynth = saade (num)
 	swap = yeh
 	pop = tuh
 
@@ -30,11 +30,11 @@ heap:
 	ret = tuh
 
 flow:
-	mark = asa
-	call = chuss
-	jmp = horr
-	jmpif0 = goiz
-	jmpifneg = saade
+	mark = asa (num)
+	call = chuss (num)
+	jmp = horr (num)
+	jmpif0 = goiz (num)
+	jmpifneg = saade (num)
 	ret = yeh
 	exit = tuh
 

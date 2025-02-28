@@ -48,7 +48,7 @@ fn skipWhitespace(self: *Self) void {
 }
 
 fn consumeWord(self: *Self) void {
-    while (self.current < self.src.len and std.ascii.isAlphabetic(self.src[self.current]))
+    while (self.current < self.src.len and !std.ascii.isWhitespace(self.src[self.current]))
         self.current += 1;
 }
 
@@ -82,7 +82,7 @@ pub fn scanToken(self: *Self) Token {
 
 test "toktok" {
     const src: []const u8 =
-        \\  asaaa as    a asa saade
+        \\  asa9aa as    a //asa saade
         \\belle goiz dsl
         \\yeh byeh
     ;
