@@ -48,7 +48,7 @@ pub fn deinit(self: *Self) void {
     self.ip = 0;
 }
 
-fn handleErr(self: *Self, err: anyerror) noreturn {
+fn handleErr(self: *Self, err: anyerror) u8 {
     const line = self.chunk.getLine(@intCast(self.ip));
     const msg = switch (err) {
         VMErrors.OutOfMemory => "Peg Tim Cook",
@@ -61,10 +61,11 @@ fn handleErr(self: *Self, err: anyerror) noreturn {
     var stderr = std.io.getStdErr().writer();
     stderr.print("Line {d}:\n\t{s}: {s}\n", .{ line, @errorName(err), msg }) catch {};
     self.deinit();
-    std.process.exit(1);
+    return 1;
+    // std.process.exit(1);
 }
 
-pub fn run(self: *Self) void {
+pub fn run(self: *Self) u8 {
     const stdout = std.io.getStdOut().writer();
     const stdin = std.io.getStdIn().reader();
 
@@ -72,7 +73,7 @@ pub fn run(self: *Self) void {
     for (self.chunk.ops, 0..) |op, pos| {
         switch (op) {
             .MARK => {
-                self.mark(op.MARK, @intCast(pos)) catch |err| self.handleErr(err);
+                self.mark(op.MARK, @intCast(pos)) catch |err| return self.handleErr(err);
                 if (op.MARK == 16) {
                     self.ip = @intCast(pos);
                 }
@@ -85,8 +86,9 @@ pub fn run(self: *Self) void {
     while (self.ip < self.chunk.ops.len) : (self.ip += 1) {
         // std.debug.print("{any}\n", .{self.stack.items});
         const op = self.chunk.ops[@intCast(self.ip)];
-        self.execInstruction(op, stdout, stdin) catch |err| self.handleErr(err);
+        self.execInstruction(op, stdout, stdin) catch |err| return self.handleErr(err);
     }
+    return 0;
 }
 
 fn execInstruction(self: *Self, op: Ops, stdout: std.fs.File.Writer, stdin: std.fs.File.Reader) anyerror!void {

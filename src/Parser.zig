@@ -187,7 +187,7 @@ fn emitBytecode(self: *Self) ParseErrors!struct { op: Ops, line: usize } {
     return ParseErrors.EndOfFile;
 }
 
-fn handleErr(self: *Self, err: anyerror, line: usize) noreturn {
+fn handleErr(self: *Self, err: anyerror, line: usize) u8 {
     const msg = switch (err) {
         ParseErrors.InvalidCommand => "I have no memory of this command",
         ParseErrors.InvalidOperationOnStack => "Why tf are you trying to pull a pushdoor??",
@@ -201,17 +201,18 @@ fn handleErr(self: *Self, err: anyerror, line: usize) noreturn {
     var stderr = std.io.getStdErr().writer();
     stderr.print("Line {d}:\n\t{s}: {s}\n", .{ line, @errorName(err), msg }) catch {};
     self.deinit();
-    std.process.exit(1);
+    return 1;
+    // std.process.exit(1);
 }
 
-pub fn populateBytecode(self: *Self) !void {
+pub fn populateBytecode(self: *Self) !u8 {
     var line: usize = 0;
     var offset: usize = 0;
 
     while (true) {
         const op_line_pair = self.emitBytecode() catch |err| switch (err) {
             ParseErrors.EndOfFile => break,
-            else => self.handleErr(err, line),
+            else => return self.handleErr(err, line),
         };
 
         if (line != op_line_pair.line) {
@@ -223,6 +224,8 @@ pub fn populateBytecode(self: *Self) !void {
 
         offset += 1;
     }
+
+    return 0;
 }
 
 pub fn makeChunk(self: *Self) !Chunk {
