@@ -65,7 +65,7 @@ fn handleErr(self: *Self, err: anyerror) u8 {
     // std.process.exit(1);
 }
 
-pub fn run(self: *Self) u8 {
+pub fn run(self: *Self) !void {
     const stdout = std.io.getStdOut().writer();
     const stdin = std.io.getStdIn().reader();
 
@@ -73,7 +73,7 @@ pub fn run(self: *Self) u8 {
     for (self.chunk.ops, 0..) |op, pos| {
         switch (op) {
             .MARK => {
-                self.mark(op.MARK, @intCast(pos)) catch |err| return self.handleErr(err);
+                try self.mark(op.MARK, @intCast(pos));
                 if (op.MARK == 16) {
                     self.ip = @intCast(pos);
                 }
@@ -86,9 +86,8 @@ pub fn run(self: *Self) u8 {
     while (self.ip < self.chunk.ops.len) : (self.ip += 1) {
         // std.debug.print("{any}\n", .{self.stack.items});
         const op = self.chunk.ops[@intCast(self.ip)];
-        self.execInstruction(op, stdout, stdin) catch |err| return self.handleErr(err);
+        try self.execInstruction(op, stdout, stdin);
     }
-    return 0;
 }
 
 fn execInstruction(self: *Self, op: Ops, stdout: std.fs.File.Writer, stdin: std.fs.File.Reader) anyerror!void {
