@@ -8,6 +8,7 @@ const LineInfo = @import("Chunk.zig").LineInfo;
 tokenizer: Tokenizer,
 ops: std.ArrayList(Ops),
 line_info: std.ArrayList(LineInfo),
+line: usize,
 state: State,
 unscanned_token: Token,
 any_unscanned: bool,
@@ -22,7 +23,7 @@ const State = enum {
     command,
 };
 
-const ParseErrors = error{
+pub const ParseErrors = error{
     EndOfFile,
     InvalidCommand,
     InvalidOperationOnStack,
@@ -39,13 +40,14 @@ pub fn init(allocator: std.mem.Allocator, src: []const u8) Self {
         .tokenizer = Tokenizer.init(src),
         .ops = std.ArrayList(Ops).init(allocator),
         .line_info = std.ArrayList(LineInfo).init(allocator),
+        .line = 0,
         .state = .command,
         .unscanned_token = undefined,
         .any_unscanned = false,
     };
 }
 
-fn deinit(self: *Self) void {
+pub fn deinit(self: *Self) void {
     self.ops.deinit();
     self.line_info.deinit();
 }
@@ -187,45 +189,24 @@ fn emitBytecode(self: *Self) ParseErrors!struct { op: Ops, line: usize } {
     return ParseErrors.EndOfFile;
 }
 
-fn handleErr(self: *Self, err: anyerror, line: usize) u8 {
-    const msg = switch (err) {
-        ParseErrors.InvalidCommand => "I have no memory of this command",
-        ParseErrors.InvalidOperationOnStack => "Why tf are you trying to pull a pushdoor??",
-        ParseErrors.InvalidArithmeticOperation => "I do not know so much math",
-        ParseErrors.InvalidOperationOnHeap => "Hippity hoppity heap isnt ur property",
-        ParseErrors.InvalidControlFlowOperation => "Where are you leading me?? To the abyss??",
-        ParseErrors.InvalidIOOperation => "Broo! How tf did you manage to mess up IO",
-        ParseErrors.EndOfFile => unreachable,
-        else => @errorName(err),
-    };
-    var stderr = std.io.getStdErr().writer();
-    stderr.print("Line {d}:\n\t{s}: {s}\n", .{ line, @errorName(err), msg }) catch {};
-    self.deinit();
-    return 1;
-    // std.process.exit(1);
-}
-
-pub fn populateBytecode(self: *Self) !u8 {
-    var line: usize = 0;
+pub fn populateBytecode(self: *Self) !void {
     var offset: usize = 0;
 
     while (true) {
         const op_line_pair = self.emitBytecode() catch |err| switch (err) {
             ParseErrors.EndOfFile => break,
-            else => return self.handleErr(err, line),
+            else => return err,
         };
 
-        if (line != op_line_pair.line) {
-            line = op_line_pair.line;
-            try self.line_info.append(.{ .offset = offset, .linenum = line });
+        if (self.line != op_line_pair.line) {
+            self.line = op_line_pair.line;
+            try self.line_info.append(.{ .offset = offset, .linenum = self.line });
         }
 
         try self.ops.append(op_line_pair.op);
 
         offset += 1;
     }
-
-    return 0;
 }
 
 pub fn makeChunk(self: *Self) !Chunk {

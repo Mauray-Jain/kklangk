@@ -65,6 +65,7 @@ pub fn scanToken(self: *Self) Token {
         self.start = self.current;
         self.consumeWord();
         // std.debug.print("{s}\n", .{self.src[self.start..self.current]});
+        if (self.current >= self.src.len) break; // If last thing is a whitespace
         switch (self.src[self.start]) {
             'a' => return self.checkKeyword("sa", Token{ .ASA = self.line }) catch continue,
             'b' => return self.checkKeyword("elle", Token{ .BELLE = self.line }) catch continue,
@@ -85,6 +86,7 @@ test "toktok" {
         \\  asa9aa as    a //asa saade
         \\belle goiz dsl
         \\yeh byeh
+        \\
     ;
 
     // const src =
