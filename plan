@@ -24,6 +24,7 @@ arithmetic:
 	mult = asa
 	div = chuss
 	mod = horr
+	xor = goiz
 
 heap:
 	str = yeh

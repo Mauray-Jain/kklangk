@@ -40,6 +40,7 @@ pub const Ops = union(enum) {
     MULT,
     DIV,
     MOD,
+    XOR,
 
     HEAPSTR,
     HEAPRET,

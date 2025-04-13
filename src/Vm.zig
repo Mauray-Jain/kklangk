@@ -104,6 +104,7 @@ fn execInstruction(self: *Self, op: Ops, stdout: std.fs.File.Writer, stdin: std.
         .MULT => try self.arithmetic(.mult),
         .DIV => try self.arithmetic(.div),
         .MOD => try self.arithmetic(.mod),
+        .XOR => try self.arithmetic(.xor),
 
         .HEAPSTR => try self.heapstr(),
         .HEAPRET => try self.heapret(),
@@ -162,7 +163,7 @@ fn swap(self: *Self) VMErrors!void {
 
 fn arithmetic(
     self: *Self,
-    comptime op: enum { add, sub, mult, div, mod },
+    comptime op: enum { add, sub, mult, div, mod, xor },
 ) VMErrors!void {
     if (self.stack.items.len < 2) return VMErrors.InsufficientElements;
     const val = try self.pop();
@@ -173,6 +174,7 @@ fn arithmetic(
         .mult => items[items.len - 1] *= val,
         .div => items[items.len - 1] = @divFloor(items[items.len - 1], val),
         .mod => items[items.len - 1] = @mod(items[items.len - 1], val),
+        .xor => items[items.len - 1] ^= val,
     }
 }
 

@@ -110,6 +110,7 @@ fn emitBytecode(self: *Self) ParseErrors!struct { op: Ops, line: usize } {
                     .ASA => |i| return .{ .op = Ops{ .MULT = void{} }, .line = i },
                     .CHUSS => |i| return .{ .op = Ops{ .DIV = void{} }, .line = i },
                     .HORR => |i| return .{ .op = Ops{ .MOD = void{} }, .line = i },
+                    .GOIZ => |i| return .{ .op = Ops{ .XOR = void{} }, .line = i },
                     else => return ParseErrors.InvalidArithmeticOperation,
                 }
             },
